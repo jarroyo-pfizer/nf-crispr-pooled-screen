@@ -113,7 +113,14 @@ workflow POOLED_SCREEN {
                     def prefix = params.prefix
                     prefix += (design_matrix.analysis_name ? ".${design_matrix.analysis_name}" : '')
                     prefix += (representation ? ".${representation}X" : '')
-                    sample: [[id: prefix, representation: representation], count_file]
+                    sample: [
+                        [
+                            id: prefix,
+                            analysis: design_matrix.analysis_name,
+                            representation: representation
+                        ],
+                        count_file
+                    ]
                     design_matrix: design_matrix.file
                 }
         MAGECK_MLE (
@@ -137,7 +144,8 @@ workflow POOLED_SCREEN {
             contrasts.collect {
                 [
                     meta: [
-                        id: "${params.prefix}.${it.group}.vs.${it.refGroup}.${representation}X",
+                        id: "${params.prefix}.${it.contrast}.${representation}X",
+                        analysis: it.analysis,
                         contrast: it.contrast,
                         reference: it.refSamples.join(","),
                         treatment: it.samples.join(","),

@@ -75,7 +75,8 @@ class PooledUtils {
                     samples: groupSamples.keySet(),
                     refGroup: reference,
                     refSamples: samplesByGroup[reference].keySet(),
-                    contrast: analysis_name
+                    analysis: analysis_name,
+                    contrast: "${group}.vs.${reference}"
                 ]
             }
         }
