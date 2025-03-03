@@ -113,11 +113,13 @@ workflow POOLED_SCREEN {
                     def prefix = params.prefix
                     prefix += (design_matrix.analysis_name ? ".${design_matrix.analysis_name}" : '')
                     prefix += (representation ? ".${representation}X" : '')
+                    def analysis_dir = representation ? "analysis_${representation}X" : 'analysis'
                     sample: [
                         [
                             id: prefix,
                             analysis: design_matrix.analysis_name,
-                            representation: representation
+                            representation: representation,
+                            publish_dir: "${analysis_dir}/mageck_mle"
                         ],
                         count_file
                     ]
@@ -142,6 +144,8 @@ workflow POOLED_SCREEN {
                 error 'At least one contrast required to run MAGeCK test!'
             }
             contrasts.collect {
+                def analysis_dir = representation ? "analysis_${representation}X" : 'analysis'
+                def analysis_suffix = it.analysis ? ".${it.analysis}" : ''
                 [
                     meta: [
                         id: "${params.prefix}.${it.contrast}.${representation}X",
@@ -149,7 +153,8 @@ workflow POOLED_SCREEN {
                         contrast: it.contrast,
                         reference: it.refSamples.join(","),
                         treatment: it.samples.join(","),
-                        representation: representation
+                        representation: representation,
+                        publish_dir: "${analysis_dir}/mageck_test${analysis_suffix}"
                     ],
                     count_table: count_file
                 ]
