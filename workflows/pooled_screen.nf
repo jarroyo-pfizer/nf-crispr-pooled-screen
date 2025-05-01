@@ -90,6 +90,13 @@ workflow POOLED_SCREEN {
     ch_metadata_yaml = LOAD_METADATA.out.meta_yaml
     ch_versions = ch_versions.mix(LOAD_METADATA.out.versions)
 
+    mageck_test_contrasts = ch_metadata_yaml.map { MageckTest.createContrasts2(it) }.flatten()
+    mageck_test_contrasts.count().map {
+        if (it == 0) {
+            error 'At least one contrast required to run MAGeCK test!'
+        }
+    }
+
     GUIDE_COUNTS (
         ch_metadata_yaml,
         ch_fastq_dir,
@@ -138,11 +145,19 @@ workflow POOLED_SCREEN {
         // normalization will be done within MAGeCK test based on the value of the normalization_method
         // parameter (modules.config is used to pass the parameter to the MAGECK_TEST process)
         // TODO: Checks whether there are contrasts to run should be moved to metadata processing
-        mageck_test_inputs = count_tables.map { representation, count_file, count_yaml ->
-            contrasts = PooledUtils.createMageckTestContrasts(count_yaml)
-            if (! contrasts) {
-                error 'At least one contrast required to run MAGeCK test!'
+        mageck_test_inputs_orig = count_tables.map { representation, count_file, count_yaml ->
+            contrasts = MageckTest.createContrasts(count_yaml)
+            contrasts.groupBy {
+                it.analysis
             }
+            .each {k, v ->
+                // println(k)
+                // println(v)
+                // println(v.collect {it.contrast})
+            }
+            //if (! contrasts) {
+            //    error 'At least one contrast required to run MAGeCK test!'
+            //}
             contrasts.collect {
                 def analysis_dir = representation ? "analysis_${representation}X" : 'analysis'
                 def analysis_suffix = it.analysis ? ".${it.analysis}" : ''
@@ -160,7 +175,30 @@ workflow POOLED_SCREEN {
                 ]
             }
         }
-        MAGECK_TEST(mageck_test_inputs.flatten(), ch_control_guides)
+
+        mageck_test_inputs = count_tables.combine(mageck_test_contrasts)
+            .map { representation, count_file, _, contrast ->
+                def analysis_dir = representation ? "analysis_${representation}X" : 'analysis'
+                def analysis_suffix = contrast.analysis ? ".${contrast.analysis}" : ''
+                [
+                    meta: [
+                        id: "${params.prefix}.${contrast.name}.${representation}X",
+                        analysis: contrast.analysis,
+                        contrast: contrast.name,
+                        reference: contrast.refSamples.join(","),
+                        treatment: contrast.samples.join(","),
+                        representation: representation,
+                        publish_dir: "${analysis_dir}/mageck_test${analysis_suffix}"
+                    ],
+                    count_table: count_file
+                ]
+            }
+        MAGECK_TEST(mageck_test_inputs, ch_control_guides)
+        mageck_test_results = MAGECK_TEST.out.gene_summary.join(MAGECK_TEST.out.sgrna_summary)
+            .map { meta, gene_summary, sgrna_summary -> 
+                [ meta.analysis, meta.representation, meta, gene_summary, sgrna_summary ]
+            }
+            .view()
         ch_versions = ch_versions.mix(MAGECK_TEST.out.versions)
     }
 
